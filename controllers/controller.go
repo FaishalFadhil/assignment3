@@ -1,172 +1,64 @@
 package controllers
 
 import (
-	"assignment-api/database"
-	"assignment-api/models"
+	"assignment3/database"
+	"assignment3/models"
 	"fmt"
-	"net/http"
+	"gorm.io/gorm/clause"
+	"math/rand"
 	"time"
-
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
-func GetAllOrders(c *gin.Context) {
+func CreateData(t time.Time) {
 	var db = database.GetDB()
-
-	var orders []models.Order
-	err := db.Preload("Items").Find(&orders).Error
-
-	if err != nil {
-		fmt.Println("Error getting order datas :", err.Error())
+	rand.Seed(time.Now().UTC().UnixNano())
+	var wind = rand.Intn(20)
+	var water = rand.Intn(10)
+	var windStatus, waterStatus string
+	if wind > 15 {
+		windStatus = "Bahaya"
+	} else if wind > 6 {
+		windStatus = "Siaga"
+	} else {
+		windStatus = "Aman"
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": orders})
+	if water > 8 {
+		waterStatus = "Bahaya"
+	} else if water > 5 {
+		waterStatus = "Siaga"
+	} else {
+		waterStatus = "Aman"
+	}
+
+	input := models.Wheater{Id: 1, Water: int32(water), Wind: int32(wind), WaterStatus: waterStatus, WindStatus: windStatus}
+	db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},                                                      // key colume
+		DoUpdates: clause.AssignmentColumns([]string{"water", "wind", "water_status", "wind_status"}), // column needed to be updated
+	}).Create(&input)
+
+	fmt.Printf("\nLOG: Data Updated on %v\n", t)
+	fmt.Printf("Water: %v, Status: %v \n", water, waterStatus)
+	fmt.Printf("Wind: %v, Status: %v \n", wind, windStatus)
 }
 
-func GetOneOrder(c *gin.Context) {
-	var db = database.GetDB()
-
-	var orderOne models.Order
-	// err := db.Table("Order").Where("Id = ?", c.Param("id")).First(&Order).Error
-	err := db.Preload("Items").First(&orderOne, "Id = ?", c.Param("id")).Error
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Record not found!"})
-		return
+func UpdateData() {
+	CreateData(time.Now())
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+	done := make(chan bool)
+	go func() {
+		time.Sleep(150 * time.Second)
+		done <- true
+	}()
+	for {
+		select {
+		case <-done:
+			fmt.Println("Done!")
+			return
+		case t := <-ticker.C:
+			CreateData(t)
+		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data One": orderOne})
-}
-
-func CreateOrder(c *gin.Context) {
-	var db = database.GetDB()
-	// Validate input
-	var input models.Order
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	currentTime := time.Now()
-
-	// Create
-	orderinput := models.Order{CustomerName: input.CustomerName, Items: input.Items, OrderedAt: currentTime}
-	db.Create(&orderinput)
-
-	c.JSON(http.StatusOK, gin.H{"data": orderinput})
-}
-
-func UpdateOrder(c *gin.Context) {
-	var db = database.GetDB()
-
-	var order models.Order
-	err := db.Preload("Items").First(&order, "Id = ?", c.Param("id")).Error
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Record not found!"})
-		return
-	}
-	// Validate input
-	var input models.Order
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	fmt.Println(input)
-	// db.Session(&gorm.Session{FullSaveAssociations: true}).Model(&order).Updates(&input)
-	db.Model(&order).Updates(&input)
-	db.Session(&gorm.Session{FullSaveAssociations: true}).Save(&order)
-	c.JSON(http.StatusOK, gin.H{"data": order})
-}
-
-func DeleteOrder(c *gin.Context) {
-	var db = database.GetDB()
-	// Get model if exist
-	var orderDelete models.Order
-	err := db.First(&orderDelete, "Id = ?", c.Param("id")).Error
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Record not found!"})
-		return
-	}
-
-	db.Delete(&orderDelete)
-
-	c.JSON(http.StatusOK, gin.H{"data": true})
-}
-
-func GetAllItems(c *gin.Context) {
-	var db = database.GetDB()
-
-	var items []models.Item
-	err := db.Find(&items).Error
-
-	if err != nil {
-		fmt.Println("Error getting Item datas :", err.Error())
-	}
-
-	c.JSON(http.StatusOK, gin.H{"data": items})
-}
-
-func GetOneItem(c *gin.Context) {
-	var db = database.GetDB()
-
-	var item models.Item
-	// err := db.Table("Car").Where("Id = ?", c.Param("id")).First(&car).Error
-	err := db.First(&item, "item_id = ?", c.Param("id")).Error
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Record not found!"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"data One": item})
-}
-
-func CreateItem(c *gin.Context) {
-	var db = database.GetDB()
-	// Validate input
-	var input models.Item
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Create book
-	ItemInput := models.Item{ItemCode: input.ItemCode, Description: input.Description, Quantity: input.Quantity, OrderId: input.OrderId}
-	db.Create(&ItemInput)
-
-	c.JSON(http.StatusOK, gin.H{"data": ItemInput})
-}
-
-func UpdateItem(c *gin.Context) {
-	var db = database.GetDB()
-
-	var Item models.Item
-	err := db.First(&Item, "item_id = ?", c.Param("id")).Error
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Record not found!"})
-		return
-	}
-	// Validate input
-	var input models.Item
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	db.Model(&Item).Updates(input)
-
-	c.JSON(http.StatusOK, gin.H{"data": Item})
-}
-
-func DeleteItem(c *gin.Context) {
-	var db = database.GetDB()
-	// Get model if exist
-	var ItemDelete models.Item
-	err := db.First(&ItemDelete, "item_id = ?", c.Param("id")).Error
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Record not found!"})
-		return
-	}
-
-	db.Delete(&ItemDelete)
-
-	c.JSON(http.StatusOK, gin.H{"data": true})
 }

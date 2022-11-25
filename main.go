@@ -1,14 +1,11 @@
 package main
 
 import (
-	"assignment-api/database"
-	"assignment-api/routers"
+	"assignment3/controllers"
+	"assignment3/database"
 )
 
 func main() {
 	database.StartDB()
-
-	var PORT = ":8080"
-
-	routers.StartServer().Run(PORT)
+	controllers.UpdateData()
 }
